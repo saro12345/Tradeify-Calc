@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tradeify Konsistenz-Rechner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        .icon {
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+        }
+        .icon-sm {
+            width: 16px;
+            height: 16px;
+        }
+        .icon-lg {
+            width: 32px;
+            height: 32px;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="max-w-6xl mx-auto p-6">
+        <div class="bg-white rounded-xl shadow-lg p-8 mb-8">
+            <!-- Header -->
+            <div class="flex items-center gap-3 mb-8">
+                <i data-lucide="calculator" class="icon text-blue-600 icon-lg"></i>
+                <h1 class="text-3xl font-bold text-gray-800">Tradeify Konsistenz-Rechner</h1>
+            </div>
+
+            <!-- Performance Overview -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8" id="metricsCards">
+                <!-- Cards werden hier dynamisch eingefügt -->
+            </div>
+
+            <!-- Konsistenz Erklärung -->
+            <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-8">
+                <h4 class="font-semibold text-blue-800 mb-2">Wie funktioniert die Konsistenz-Berechnung?</h4>
+                <p class="text-blue-700 text-sm">
+                    Konsistenz = (Höchster Profit Tag ÷ Gesamtprofit) × 100%. 
+                    Je niedriger der Wert, desto konsistenter sind Ihre Ergebnisse. 
+                    Tradeify verlangt maximal 20% für eine Auszahlung.
+                </p>
+            </div>
+
+            <!-- Trading Ziele (wird dynamisch angezeigt) -->
+            <div id="tradingGoals" style="display: none;">
+                <!-- Wird bei Konsistenz > 20% angezeigt -->
+            </div>
+
+            <!-- Add New Trading Day -->
+            <div class="bg-gray-50 rounded-lg p-6 mb-8">
+                <h3 class="text-xl font-semibold mb-4 text-gray-800">Neuen Trading Tag hinzufügen</h3>
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Datum</label>
+                        <input
+                            type="date"
+                            id="newDate"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">P&L ($)</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            id="newPnL"
+                            placeholder="z.B. 359.72 oder -150.00"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                    </div>
+                    <div class="flex items-end">
+                        <button
+                            onclick="addTradingDay()"
+                            id="addButton"
+                            class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
+                        >
+                            <i data-lucide="plus" class="icon icon-sm"></i>
+                            Hinzufügen
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trading Days Table -->
+            <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-xl font-semibold text-gray-800">Daily Journal</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Datum
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Net P&L
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Acc Balance
+                                </th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Aktionen
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="tradingDaysTable" class="bg-white divide-y divide-gray-200">
+                            <!-- Einträge werden hier dynamisch eingefügt -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="text-center py-8 text-gray-500" style="display: none;">
+                <i data-lucide="calendar" class="icon mx-auto mb-4 opacity-50" style="width: 48px; height: 48px;"></i>
+                <p>Keine Trading-Daten vorhanden. Fügen Sie Ihren ersten Trading-Tag hinzu!</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Globale Variablen
+        let tradingDays = [
+            { date: '2025-07-11', pnl: 359.72 },
+            { date: '2025-07-10', pnl: 307.30 },
+            { date: '2025-07-09', pnl: 545.56 }
+        ];
+        const initialBalance = 50000;
+
+        // Hilfsfunktionen
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('de-DE', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: 2
+            }).format(amount);
+        }
+
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleDateString('de-DE');
+        }
+
+        function calculateMetrics() {
+            if (tradingDays.length === 0) {
+                return {
+                    totalProfit: 0,
+                    totalProfitPercentage: 0,
+                    currentBalance: initialBalance,
+                    highestProfitDay: 0,
+                    consistency: 0,
+                    consistencyStatus: 'Keine Daten',
+                    profitableDays: 0,
+                    lossDays: 0
+                };
+            }
+
+            const sortedDays = [...tradingDays].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const totalProfit = sortedDays.reduce((sum, day) => sum + day.pnl, 0);
+            const currentBalance = initialBalance + totalProfit;
+            const totalProfitPercentage = (totalProfit / initialBalance) * 100;
+            const highestProfitDay = Math.max(...sortedDays.map(day => day.pnl));
+            
+            const consistency = totalProfit > 0 ? (highestProfitDay / totalProfit) * 100 : 0;
+            const consistencyStatus = consistency <= 20 ? 'Erreicht' : 'Nicht erreicht';
+            
+            const profitableDays = sortedDays.filter(day => day.pnl > 0).length;
+            const lossDays = sortedDays.filter(day => day.pnl < 0).length;
+
+            return {
+                totalProfit,
+                totalProfitPercentage,
+                currentBalance,
+                highestProfitDay,
+                consistency,
+                consistencyStatus,
+                profitableDays,
+                lossDays
+            };
+        }
+
+        function updateMetricsCards() {
+            const metrics = calculateMetrics();
+            const metricsContainer = document.getElementById('metricsCards');
+            
+            metricsContainer.innerHTML = `
+                <div class="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-6 text-white">
+                    <div class="flex items-center gap-3 mb-2">
+                        <i data-lucide="dollar-sign" class="icon"></i>
+                        <h3 class="text-lg font-semibold">Account Balance</h3>
+                    </div>
+                    <p class="text-2xl font-bold">${formatCurrency(metrics.currentBalance)}</p>
+                    <p class="text-green-100">
+                        ${metrics.totalProfit >= 0 ? '+' : ''}${formatCurrency(metrics.totalProfit)} 
+                        (${metrics.totalProfitPercentage.toFixed(2)}%)
+                    </p>
+                </div>
+
+                <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-6 text-white">
+                    <div class="flex items-center gap-3 mb-2">
+                        <i data-lucide="calendar" class="icon"></i>
+                        <h3 class="text-lg font-semibold">Trading Days</h3>
+                    </div>
+                    <p class="text-2xl font-bold">${tradingDays.length}</p>
+                    <p class="text-blue-100">
+                        ${metrics.profitableDays} profitable, ${metrics.lossDays} loss days
+                    </p>
+                </div>
+
+                <div class="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg p-6 text-white">
+                    <div class="flex items-center gap-3 mb-2">
+                        <i data-lucide="trending-up" class="icon"></i>
+                        <h3 class="text-lg font-semibold">Höchster Profit Tag</h3>
+                    </div>
+                    <p class="text-2xl font-bold">${formatCurrency(metrics.highestProfitDay)}</p>
+                </div>
+
+                <div class="rounded-lg p-6 text-white ${
+                    metrics.consistency <= 20 ? 'bg-gradient-to-r from-green-500 to-green-600' : 
+                    'bg-gradient-to-r from-red-500 to-red-600'
+                }">
+                    <h3 class="text-lg font-semibold mb-2">Konsistenz</h3>
+                    <p class="text-2xl font-bold">${metrics.consistency.toFixed(2)}%</p>
+                    <p class="text-sm opacity-90">
+                        ${metrics.consistencyStatus} (Min: 20%)
+                    </p>
+                </div>
+            `;
+            
+            // Icons aktualisieren
+            lucide.createIcons();
+            
+            // Trading Goals anzeigen/verstecken
+            updateTradingGoals(metrics);
+        }
+
+        function updateTradingGoals(metrics) {
+            const tradingGoalsDiv = document.getElementById('tradingGoals');
+            
+            if (metrics.consistency > 20) {
+                const targetProfit = 600;
+                const requiredTotal = targetProfit / 0.20;
+                const stillNeeded = requiredTotal - metrics.totalProfit - targetProfit;
+                
+                tradingGoalsDiv.style.display = 'block';
+                tradingGoalsDiv.innerHTML = `
+                    <div class="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-6 mb-8">
+                        <h3 class="text-xl font-semibold text-orange-800 mb-4">📊 Trading-Ziele für nächste Tage</h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="bg-white rounded-lg p-4 border border-orange-200">
+                                <h4 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                    🎯 Szenario 1: Sicherheitsstrategie
+                                </h4>
+                                <div class="space-y-2 text-sm">
+                                    <p class="text-gray-600">
+                                        <strong>Max. Profit pro Tag:</strong> <span class="text-orange-600 font-mono">${formatCurrency(metrics.highestProfitDay - 0.01)}</span>
+                                    </p>
+                                    <p class="text-gray-600">
+                                        <strong>Min. Gesamtprofit benötigt:</strong> <span class="text-green-600 font-mono">${formatCurrency(metrics.highestProfitDay / 0.20)}</span>
+                                    </p>
+                                    <p class="text-gray-600">
+                                        <strong>Noch benötigt:</strong> <span class="text-blue-600 font-mono">${formatCurrency((metrics.highestProfitDay / 0.20) - metrics.totalProfit)}</span>
+                                    </p>
+                                    <div class="bg-green-50 p-2 rounded border border-green-200 mt-3">
+                                        <p class="text-green-700 text-xs">
+                                            ✅ Garantiert 20% Konsistenz, wenn Sie nicht mehr als $${(metrics.highestProfitDay - 0.01).toFixed(2)} pro Tag verdienen
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white rounded-lg p-4 border border-orange-200">
+                                <h4 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                    🚀 Szenario 2: Aggressiv-Strategie
+                                </h4>
+                                <div class="space-y-2 text-sm">
+                                    <p class="text-gray-600">
+                                        <strong>Wenn Sie $${targetProfit} an einem Tag machen:</strong>
+                                    </p>
+                                    <p class="text-gray-600">
+                                        <strong>Benötigter Gesamtprofit:</strong> <span class="text-orange-600 font-mono">${formatCurrency(requiredTotal)}</span>
+                                    </p>
+                                    <p class="text-gray-600">
+                                        <strong>Danach noch benötigt:</strong> <span class="text-red-600 font-mono">${formatCurrency(stillNeeded)}</span>
+                                    </p>
+                                    <div class="bg-yellow-50 p-2 rounded border border-yellow-200 mt-3">
+                                        <p class="text-yellow-700 text-xs">
+                                            ⚠️ Höhere Tage erfordern mehr Gesamtprofit für 20% Konsistenz
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 bg-white rounded-lg p-4 border border-orange-200">
+                            <h4 class="font-semibold text-gray-800 mb-3">🧮 Interaktiver Ziel-Rechner</h4>
+                            <div class="flex flex-col sm:flex-row gap-4 items-end">
+                                <div class="flex-1">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        Geplanter Profit für nächsten Tag ($)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="z.B. 400.00"
+                                        oninput="calculateGoalResult(this.value)"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+                                    />
+                                </div>
+                                <div id="calc-result" class="flex-1 min-h-[60px] bg-gray-50 rounded p-3 text-sm text-gray-500">
+                                    Geben Sie einen Wert ein für Live-Berechnung
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                tradingGoalsDiv.style.display = 'none';
+            }
+        }
+
+        function calculateGoalResult(value) {
+            const metrics = calculateMetrics();
+            const plannedProfit = parseFloat(value) || 0;
+            
+            if (plannedProfit > 0) {
+                const newHighest = Math.max(metrics.highestProfitDay, plannedProfit);
+                const newTotal = metrics.totalProfit + plannedProfit;
+                const newConsistency = (newHighest / newTotal) * 100;
+                const requiredTotalFor20 = newHighest / 0.20;
+                const stillNeededAfter = requiredTotalFor20 - newTotal;
+                
+                const resultDiv = document.getElementById('calc-result');
+                resultDiv.innerHTML = `
+                    <div class="text-sm space-y-1">
+                        <p><strong>Neue Konsistenz:</strong> <span class="${newConsistency <= 20 ? 'text-green-600' : 'text-red-600'}">${newConsistency.toFixed(2)}%</span></p>
+                        <p><strong>Benötigter Gesamtprofit für 20%:</strong> $${requiredTotalFor20.toFixed(2)}</p>
+                        <p><strong>Danach noch benötigt:</strong> <span class="${stillNeededAfter <= 0 ? 'text-green-600' : 'text-red-600'}">$${stillNeededAfter.toFixed(2)}</span></p>
+                    </div>
+                `;
+            }
+        }
+
+        function updateTable() {
+            const tableBody = document.getElementById('tradingDaysTable');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (tradingDays.length === 0) {
+                tableBody.innerHTML = '';
+                emptyState.style.display = 'block';
+                document.querySelector('.overflow-x-auto').parentElement.style.display = 'none';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            document.querySelector('.overflow-x-auto').parentElement.style.display = 'block';
+            
+            const sortedDays = [...tradingDays].sort((a, b) => new Date(b.date) - new Date(a.date));
+            const chronologicalDays = [...tradingDays].sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            tableBody.innerHTML = sortedDays.map((day, index) => {
+                const dayIndex = chronologicalDays.findIndex(d => d.date === day.date);
+                const balanceUpToDay = initialBalance + chronologicalDays.slice(0, dayIndex + 1).reduce((sum, d) => sum + d.pnl, 0);
+                const originalIndex = tradingDays.indexOf(day);
+                
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${formatDate(day.date)}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium ${
+                            day.pnl >= 0 ? 'text-green-600' : 'text-red-600'
+                        }">
+                            ${day.pnl >= 0 ? '+' : ''}${formatCurrency(day.pnl)}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${formatCurrency(balanceUpToDay)}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button
+                                onclick="removeTradingDay(${originalIndex})"
+                                class="text-red-600 hover:text-red-900 transition-colors"
+                            >
+                                <i data-lucide="trash-2" class="icon icon-sm"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            // Icons aktualisieren
+            lucide.createIcons();
+        }
+
+        function addTradingDay() {
+            const dateInput = document.getElementById('newDate');
+            const pnlInput = document.getElementById('newPnL');
+            
+            if (dateInput.value && pnlInput.value !== '') {
+                const pnlValue = parseFloat(pnlInput.value);
+                tradingDays.push({ date: dateInput.value, pnl: pnlValue });
+                dateInput.value = '';
+                pnlInput.value = '';
+                updateUI();
+                saveToLocalStorage();
+            }
+        }
+
+        function removeTradingDay(index) {
+            tradingDays.splice(index, 1);
+            updateUI();
+            saveToLocalStorage();
+        }
+
+        function updateUI() {
+            updateMetricsCards();
+            updateTable();
+            updateAddButton();
+        }
+
+        function updateAddButton() {
+            const dateInput = document.getElementById('newDate');
+            const pnlInput = document.getElementById('newPnL');
+            const addButton = document.getElementById('addButton');
+            
+            const isValid = dateInput.value && pnlInput.value !== '';
+            addButton.disabled = !isValid;
+            addButton.className = `${isValid ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400'} text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2`;
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('tradeifyTradingDays', JSON.stringify(tradingDays));
+        }
+
+        function loadFromLocalStorage() {
+            const saved = localStorage.getItem('tradeifyTradingDays');
+            if (saved) {
+                tradingDays = JSON.parse(saved);
+            }
+        }
+
+        // Event Listeners
+        document.getElementById('newDate').addEventListener('input', updateAddButton);
+        document.getElementById('newPnL').addEventListener('input', updateAddButton);
+        document.getElementById('newPnL').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                addTradingDay();
+            }
+        });
+
+        // Initialisierung
+        document.addEventListener('DOMContentLoaded', function() {
+            loadFromLocalStorage();
+            updateUI();
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>
